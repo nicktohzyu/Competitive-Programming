@@ -1,0 +1,18 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+E:/code/CP/Prsteni/Fraction.h
+bits/stdc++.h
+-
+
+E:/code/CP/Prsteni/Prsteni.cpp
+bits/stdc++.h
+-
+Fraction.h
+E:/code/CP/Prsteni/Fraction.h
+

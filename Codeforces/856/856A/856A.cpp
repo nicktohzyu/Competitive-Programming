@@ -1,14 +1,10 @@
 #include <bits/stdc++.h>
+
 #define FOR(i, j, k, in) for (int i=j ; i<k ; i+=in)
 #define REP(i, j) FOR(i, 0, j, 1)
+
 using namespace std;
-typedef vector<int> VI;
-ostream& operator << (ostream& oss, VI& v) {
-    REP(i, v.size()) {
-        oss << v[i] << " ";
-    }
-    return oss;
-}
+
 void tc();
 
 int main()
@@ -26,8 +22,16 @@ int main()
 void tc() {
     int n;
     cin >> n;
-    VI nums(n);
-    REP(i, n) {
-        cin >> nums[i];
+    unordered_set<string> strs;
+    REP(i, (n-1)*2) {
+        string s;
+        cin >> s;
+        if(strs.contains(s)) {
+            strs.erase(s);
+        } else {
+            std::reverse(s.begin(), s.end());
+            strs.insert(s);
+        }
     }
+    cout << (strs.empty() ? "YES" : "NO") << "\n";
 }

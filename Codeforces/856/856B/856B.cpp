@@ -29,5 +29,14 @@ void tc() {
     VI nums(n);
     REP(i, n) {
         cin >> nums[i];
+        if(nums[i] == 1) {
+            nums[i]++;
+        }
     }
+    REP(i, n-1) {
+        if(nums[i+1] % nums[i] == 0) {
+            nums[i+1]++;
+        }
+    }
+    cout << nums << "\n";
 }

@@ -30,4 +30,12 @@ void tc() {
     REP(i, n) {
         cin >> nums[i];
     }
+    int idx = 0;
+    REP(i, n) {
+        while(nums[idx] < i+1-idx) {
+            idx++;
+        }
+        cout << i - idx + 1 << " ";
+    }
+    cout << "\n";
 }

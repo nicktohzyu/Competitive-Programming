@@ -25,9 +25,21 @@ int main()
 
 void tc() {
     int n;
-    cin >> n;
-    VI nums(n);
+    string s;
+    cin >> n >> s;
+    unordered_map<char, char> mapping;
     REP(i, n) {
-        cin >> nums[i];
+        char &c = s[i];
+        char digit = i%2 + '0';
+        if(mapping.count(c)) {
+            if(mapping[c] != digit) {
+                cout << "no\n";
+                return;
+            }
+        } else {
+            mapping[c] = digit;
+        }
+        c = mapping[c];
     }
+    cout << "yes\n";
 }

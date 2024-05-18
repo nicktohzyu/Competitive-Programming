@@ -24,10 +24,7 @@ int main()
 }
 
 void tc() {
-    int n;
-    cin >> n;
-    VI nums(n);
-    REP(i, n) {
-        cin >> nums[i];
-    }
+    int a, b, c;
+    cin >> a >> b >> c;
+    cout << ((a+b == c) ? "+" : "-") << "\n";
 }

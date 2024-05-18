@@ -24,10 +24,23 @@ int main()
 }
 
 void tc() {
-    int n;
-    cin >> n;
-    VI nums(n);
-    REP(i, n) {
-        cin >> nums[i];
+    int n, q;
+    cin >> n >> q;
+    VI parity(n+1);
+    parity[0] = 0;
+    FOR(i, 1, n+1, 1) {
+        int t;
+        cin >> t;
+        parity[i] = parity[i-1] + (t%2);
+    }
+    int total_parity = parity[n];
+    REP(i, q) {
+        int l, r, k;
+        cin >> l >> r >> k;
+        int change = parity[r] - parity[l-1];
+        if((r-l) % 2 == 0 && k %2 != 0) {
+            change++;
+        }
+        cout << ((total_parity + change) %2 == 1 ? "yes" : "no") << "\n";
     }
 }

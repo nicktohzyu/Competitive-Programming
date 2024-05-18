@@ -26,8 +26,16 @@ int main()
 void tc() {
     int n;
     cin >> n;
-    VI nums(n);
+//    VI nums(n);
+    int even = 0, odd = 0;
     REP(i, n) {
-        cin >> nums[i];
+        int t;
+        cin >> t;
+        if(t % 2 == 0) {
+            even += t;
+        } else {
+            odd += t;
+        }
     }
+    cout << ((even > odd) ? "yes" : "no") << "\n";
 }

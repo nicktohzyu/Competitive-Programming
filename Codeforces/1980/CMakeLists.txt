@@ -1,0 +1,8 @@
+add_executable(A A/A.cpp
+        ../DRW.cpp)
+add_executable(B B/B.cpp)
+add_executable(C C/C.cpp)
+add_executable(D D/D.cpp)
+add_executable(E E/E.cpp)
+add_executable(F F/F.cpp)
+add_executable(G G/G.cpp)

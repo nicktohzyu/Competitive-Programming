@@ -27,7 +27,28 @@ void tc() {
     int n;
     cin >> n;
     VI nums(n);
+    int totalBits = 0;
     REP(i, n) {
         cin >> nums[i];
+        totalBits |= nums[i];
     }
+    int k = 1;
+    REP(bit, 21) {
+        if(!(totalBits & 1 << bit)) {
+            continue;
+        }
+        int lastIdx = -1;
+        int localK = 0;
+        REP(i, n) {
+            if(!(nums[i] & 1 << bit)) {
+                continue;
+            }
+            int gap = i - lastIdx;
+            lastIdx = i;
+            localK = max(localK, gap);
+        }
+        localK = max(localK, n - lastIdx);
+        k = max(k, localK);
+    }
+    cout << k << "\n";
 }

@@ -1,0 +1,1 @@
+add_executable(Leetcode-Soln Soln.cpp)

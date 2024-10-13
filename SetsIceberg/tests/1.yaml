@@ -1,0 +1,8 @@
+# Peak size is determined after matching
+#I S 5501 1 100 50
+#I B 5503 1 154 101
+
+# Peak size is of resting is not refilled until exhausted
+I B 5503 1 154 101
+I S 5501 1 100 50
+

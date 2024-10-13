@@ -29,25 +29,64 @@ struct custom_hash {
 
 gp_hash_table<int, int, custom_hash> mp;
 
-void tc();
+bool tc();
 
-int main()
-{
+int main() {
     ios_base::sync_with_stdio(false);
     cin.tie(NULL);
     int t;
     cin >> t;
     while (t--) {
-        tc();
+        if (tc()) {
+            cout << "YES\n";
+        } else {
+            cout << "NO\n";
+        }
     }
     return 0;
 }
 
-void tc() {
+bool try_remove(VI nums, int idx) {
+    nums.erase(nums.begin() + idx);
+    VI GCDs;
+    FOR (i, 1, nums.size(), 1) {
+        GCDs.push_back(gcd(nums[i - 1], nums[i]));
+    }
+    FOR (i, 1, GCDs.size(), 1) {
+        if (GCDs[i - 1] > GCDs[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool tc() {
     int n;
     cin >> n;
     VI nums(n);
     REP(i, n) {
         cin >> nums[i];
     }
+    VI GCDs;
+    FOR (i, 1, n, 1) {
+        GCDs.push_back(gcd(nums[i - 1], nums[i]));
+    }
+    VI idxs;
+    FOR (i, 1, GCDs.size(), 1) {
+        if (GCDs[i - 1] > GCDs[i]) {
+            idxs.push_back(i - 1);
+        }
+    }
+    if (idxs.empty()) {
+        return true;
+    }
+    if (idxs.size() > 2) {
+        return false;
+    }
+    if (idxs.size() == 2 && idxs[0] + 1 != idxs[1]) {
+            return false;
+    }
+    return try_remove(nums, idxs[0])
+           || try_remove(nums, idxs[0] + 1)
+           || try_remove(nums, idxs[0] + 2);
 }

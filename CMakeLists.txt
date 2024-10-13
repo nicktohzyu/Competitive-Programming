@@ -3,4 +3,6 @@ project(Competitive_Programming)
 
 set(CMAKE_CXX_STANDARD 20)
 
+add_subdirectory(leet)
 add_subdirectory(Codeforces)
+add_subdirectory(SetsIceberg)

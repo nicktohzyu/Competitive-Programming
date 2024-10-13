@@ -1,11 +1,11 @@
 
-#include <list>
-#include <unordered_map>
-#include <vector>
-#include <iostream>
 #include <format>
+#include <iostream>
+#include <list>
 #include <map>
 #include <sstream>
+#include <unordered_map>
+#include <vector>
 
 enum class Side {
     Buy, Sell
@@ -100,18 +100,18 @@ public:
         // Generate Trade messages
         for (auto resting_id: trade_sequence) {
             int trade_qty = trade_total_quantities[resting_id];
-            std::cout << std::format("M {} {} {} {}\n",
-                                     incoming_order.side == Side::Buy ? incoming_order.id : resting_id /* buyer ID */,
-                                     incoming_order.side == Side::Sell ? incoming_order.id : resting_id /* seller ID */,
-                                     price /* trade at resting price (this level) */,
-                                     trade_qty);
-
+            std::cout << std::format(
+                    "M {} {} {} {}\n",
+                    incoming_order.side == Side::Buy ? incoming_order.id : resting_id /* buyer ID */,
+                    incoming_order.side == Side::Sell ? incoming_order.id : resting_id /* seller ID */,
+                    price /* trade at resting price (this level) */, trade_qty);
         }
     }
 
     void printBook() const {
         for (const auto &order: orders) {
-            std::cout << std::format("O {} {} {} {}\n", side == Side::Buy ? "B" : "S",
+            std::cout << std::format("O {} {} {} {}\n",
+                                     side == Side::Buy ? "B" : "S",
                                      order.id,
                                      order.price,
                                      order.visible_quantity);
@@ -206,8 +206,8 @@ private:
     void enterOrderIntoBook(const Order &order) {
         // Implicitly template over map comparator type
         auto insertIntoBookSide = [&, this](BookSide auto &book_side) -> void {
-            auto [price_level_it, inserted] = book_side.try_emplace(
-                    order.price, order.price, order.side);
+            auto [price_level_it, inserted] =
+                    book_side.try_emplace(order.price, order.price, order.side);
             // Map the order ID to its level for fast cancellation
             order_location_by_id[order.id] = OrderLocation{.side = order.side, .price = order.price};
             PriceLevel &level = price_level_it->second;
@@ -250,7 +250,6 @@ private:
         }
     }
 };
-
 
 int main() {
     MatchingEngine engine;

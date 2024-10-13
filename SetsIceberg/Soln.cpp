@@ -1,4 +1,11 @@
-#include <bits/stdc++.h>
+
+#include <list>
+#include <unordered_map>
+#include <vector>
+#include <iostream>
+#include <format>
+#include <map>
+#include <sstream>
 
 enum class Side {
     Buy, Sell
@@ -17,37 +24,51 @@ struct Order {
     }
 };
 
+// Lesser info to track which level an order is in (for efficient cancelling)
+struct OrderLocation {
+    Side side;
+    int price;
+};
+
 class PriceLevel {
 public:
     const int price;
     const Side side;
 
-    PriceLevel(int p, Side s, std::function<void(int)> clear_order_callback) :
-            price(p), side(s), orders(), clear_order_callback{clear_order_callback} {}
+private:
+    std::list<Order> orders; // implicitly arranged by time priority
+    // Invariant that orders in `orders` must have non-zero visible quantity
+    // Invariant that order in `orders` corresponds to an entry in `order_it_by_id`
+    //   and MatchingEngine's `order_location_by_id`
+    std::unordered_map<int, std::list<Order>::iterator> order_it_by_id;
+
+public:
+    PriceLevel(int p, Side s) :
+            price{p}, side{s}, orders{} {}
 
     void addOrder(const Order &order) {
         orders.emplace_back(order);
+        order_it_by_id[order.id] = std::prev(orders.end());
     }
 
-    // Match an incoming order against resting orders in this price level
-    // Updates incoming_order and populates trade_map
-    void matchAgainstIncomingOrder(Order &incoming_order) {
-        std::unordered_map<int, int> trade_total_quantities; // resting_order_id -> (total traded quantity)
-        std::vector<int> trade_sequence; // sequence of resting order_ids
+    void matchAgainstIncomingOrder(Order &incoming_order,
+                                   std::unordered_map<int, OrderLocation> &order_location_by_id) {
+        std::unordered_map<int, int> trade_total_quantities; // resting_order_id -> total traded quantity
+        std::vector<int> trade_sequence; // sequence of resting order_ids traded against
 
-        auto it = orders.begin();
-        while (it != orders.end() && incoming_order.isAlive()) {
-            Order &resting_order = *it;
+        auto order_it = orders.begin();
+        while (order_it != orders.end() && incoming_order.isAlive()) {
+            Order &resting_order = *order_it;
 
             // Determine trade quantity
-            int trade_qty = std::min(incoming_order.visible_quantity, resting_order.visible_quantity);
+            int matched_quantity = std::min(incoming_order.visible_quantity, resting_order.visible_quantity);
 
             // Update incoming order and resting order
-            incoming_order.visible_quantity -= trade_qty;
-            resting_order.visible_quantity -= trade_qty;
+            incoming_order.visible_quantity -= matched_quantity;
+            resting_order.visible_quantity -= matched_quantity;
 
             auto [trade_it, inserted] = trade_total_quantities.try_emplace(resting_order.id, 0);
-            trade_it->second += trade_qty;
+            trade_it->second += matched_quantity;
             if (inserted) {
                 trade_sequence.push_back(resting_order.id);
             }
@@ -64,11 +85,16 @@ public:
                 int replenish_qty = std::min(refilled.hidden_quantity, refilled.max_peak_size);
                 refilled.visible_quantity = replenish_qty;
                 refilled.hidden_quantity -= replenish_qty;
-                orders.emplace_back(refilled);
+                addOrder(refilled);
+            } else {
+                // Order is fully filled
+                order_it_by_id.erase(resting_order.id);
+                order_location_by_id.erase(resting_order.id);
             }
 
             // Either this order is fully filled or we've refilled it (and pushed a copy)
-            it = orders.erase(it);
+            // In either case we remove it from the front of the list
+            order_it = orders.erase(order_it);
         }
 
         // Generate Trade messages
@@ -77,7 +103,7 @@ public:
             std::cout << std::format("M {} {} {} {}\n",
                                      incoming_order.side == Side::Buy ? incoming_order.id : resting_id /* buyer ID */,
                                      incoming_order.side == Side::Sell ? incoming_order.id : resting_id /* seller ID */,
-                                     price /* trade at resting price */,
+                                     price /* trade at resting price (this level) */,
                                      trade_qty);
 
         }
@@ -96,32 +122,28 @@ public:
         return orders.empty();
     }
 
-    void cancelOrder(int i) {
-
+    void cancelOrder(int id) {
+        auto map_it = order_it_by_id.find(id);
+        orders.erase(map_it->second);
+        order_it_by_id.erase(map_it);
     }
-
-private:
-    std::list<Order> orders; // implicitly arranged by time priority
-    // Invariant that orders in list must have non-zero visible quantity
-    std::function<void(int)> clear_order_callback;
 };
 
+// Constrains templating to reduce buy/sell code duplication
 template<typename T>
 concept BookSide =
 std::is_same_v<T, std::map<int, PriceLevel, std::less<>>> ||
 std::is_same_v<T, std::map<int, PriceLevel, std::greater<>>>;
 
-// Class to handle order matching and book management
 class MatchingEngine {
 private:
-    // Track which level an order is in for efficient cancelling
-    struct OrderLocation {
-        Side side;
-        int price;
-    };
+    std::map<int, PriceLevel, std::greater<>> buy_levels;
+    std::map<int, PriceLevel, std::less<>> sell_levels;
+    // Map from order ID to its location
+    std::unordered_map<int, OrderLocation> order_location_by_id;
 
 public:
-    MatchingEngine() : buy_levels(), sell_levels(), order_map() {}
+    MatchingEngine() : buy_levels(), sell_levels(), order_location_by_id() {}
 
     void insertLimitOrder(Side side, int id, int price, int quantity) {
         // Handle limit orders as iceberg with quantity = peak size
@@ -132,9 +154,10 @@ public:
         // When an order is aggressing, its full quantity is available
         Order incoming_order{side, id, price, quantity, 0, peak_size};
         matchOrder(incoming_order);
+
         // If there is remaining quantity, hide the non-peak amount
+        // Per specification, visible peak size is determined after trades effected
         if (incoming_order.isAlive()) {
-            // Per specification, visible peak size is determined after trades effected
             if (incoming_order.visible_quantity > peak_size) {
                 incoming_order.hidden_quantity =
                         incoming_order.visible_quantity - peak_size;
@@ -147,15 +170,15 @@ public:
 
     void cancelOrder(int id) {
         // Per spec, assume that order is live
-        auto it = order_map.find(id);
+        auto it = order_location_by_id.find(id);
         auto [side, price] = it->second;
 
         auto cancelInBookSide = [price, id](BookSide auto &book_side) -> void {
-            auto level_it = book_side.find(price);
-            PriceLevel &level = level_it->second;
+            auto price_level_it = book_side.find(price);
+            PriceLevel &level = price_level_it->second;
             level.cancelOrder(id);
             if (level.empty()) {
-                book_side.erase(level_it);
+                book_side.erase(price_level_it);
             }
         };
 
@@ -165,7 +188,7 @@ public:
             cancelInBookSide(sell_levels);
         }
 
-        order_map.erase(it);
+        order_location_by_id.erase(it);
         printOrderBook();
     }
 
@@ -181,21 +204,14 @@ public:
 
 private:
     void enterOrderIntoBook(const Order &order) {
-        auto clear_order_callback = [this](int order_id) {
-            order_map.erase(order_id);
-        };
-
-        //Implicitly template over map comparator type
+        // Implicitly template over map comparator type
         auto insertIntoBookSide = [&, this](BookSide auto &book_side) -> void {
-            auto price_level_it = book_side.find(order.price);
-            if (price_level_it == book_side.end()) {
-                price_level_it = book_side.emplace(order.price, PriceLevel(order.price, order.side), clear_order_callback).first;
-            }
-
-            price_level_it->second.addOrder(order);
-
-            // Map the order ID to its level
-            order_map[order.id] = OrderLocation{.side = order.side, .price = order.price};
+            auto [price_level_it, inserted] = book_side.try_emplace(
+                    order.price, order.price, order.side);
+            // Map the order ID to its level for fast cancellation
+            order_location_by_id[order.id] = OrderLocation{.side = order.side, .price = order.price};
+            PriceLevel &level = price_level_it->second;
+            level.addOrder(order);
         };
 
         if (order.side == Side::Buy) {
@@ -216,7 +232,8 @@ private:
                     break;
                 }
 
-                top_level.matchAgainstIncomingOrder(incoming_order);
+                // Matching may result in resting orders being cleared; we want to remove them from this map
+                top_level.matchAgainstIncomingOrder(incoming_order, order_location_by_id);
 
                 if (!top_level.empty()) {
                     // If the level isn't cleared then the aggressor must be fully filled
@@ -232,11 +249,6 @@ private:
             matchOrders(buy_levels);
         }
     }
-
-    std::map<int, PriceLevel, std::greater<>> buy_levels;
-    std::map<int, PriceLevel, std::less<>> sell_levels;
-    // Map from order ID to its location
-    std::unordered_map<int, OrderLocation> order_map;
 };
 
 

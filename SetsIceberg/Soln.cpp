@@ -24,7 +24,7 @@ struct Order {
     }
 };
 
-// Lesser info to track which level an order is in (for efficient cancelling)
+// To track which level an order is in (for efficient cancelling)
 struct OrderLocation {
     Side side;
     int price;
@@ -36,11 +36,19 @@ public:
     const Side side;
 
 private:
-    std::list<Order> orders; // implicitly arranged by time priority
+    std::list<Order> orders; // Implicitly arranged by time priority
     // Invariant that orders in `orders` must have non-zero visible quantity
     // Invariant that order in `orders` corresponds to an entry in `order_it_by_id`
-    //   and MatchingEngine's `order_location_by_id`
+    // and in MatchingEngine's `order_location_by_id`
+
+    // For efficient cancelling
     std::unordered_map<int, std::list<Order>::iterator> order_it_by_id;
+    /* An alternative to this approach could be lazy delete, where we simply store
+     * the id in a hashset on cancellation and only remove the order when we come
+     * across it later. In a practical matching engine it might cause an accumulation
+     * of a lot of dead orders in levels that aren't traded against.
+     * Technically for this assignment we'll always hit it when printing the
+     * book, but I didn't want to have logic triggered by the IO routines. */
 
 public:
     PriceLevel(int p, Side s) :
@@ -51,17 +59,30 @@ public:
         order_it_by_id[order.id] = std::prev(orders.end());
     }
 
+    /* To work with this implementation for fast cancelling (where we need to cleanup our id maps
+     * when a resting order is filled) I considered the alternatives of passing
+     * `order_location_by_id` ref against
+     * - initialize the PriceLevel class with std::function captured lambda
+     *      performance hit due to un-inlineable function with type erasure and this/reference
+     *      capture. We could template over the lambda type instead of using std::function
+     *      to mitigate this performance hit but I felt it was unnecessarily complex
+     * - initialize the PriceLevel class with ref to PriceLevel
+     *      unnecessary coupling and less clear code
+     */
     void matchAgainstIncomingOrder(Order &incoming_order,
                                    std::unordered_map<int, OrderLocation> &order_location_by_id) {
-        std::unordered_map<int, int> trade_total_quantities; // resting_order_id -> total traded quantity
-        std::vector<int> trade_sequence; // sequence of resting order_ids traded against
+        // Resting_order_id -> total traded quantity
+        std::unordered_map<int, int> trade_total_quantities;
+        // Sequence of resting order_ids that were traded against
+        std::vector<int> trade_sequence;
 
         auto order_it = orders.begin();
         while (order_it != orders.end() && incoming_order.isAlive()) {
             Order &resting_order = *order_it;
 
             // Determine trade quantity
-            int matched_quantity = std::min(incoming_order.visible_quantity, resting_order.visible_quantity);
+            int matched_quantity = std::min(incoming_order.visible_quantity,
+                                            resting_order.visible_quantity);
 
             // Update incoming order and resting order
             incoming_order.visible_quantity -= matched_quantity;
@@ -104,7 +125,8 @@ public:
                     "M {} {} {} {}\n",
                     incoming_order.side == Side::Buy ? incoming_order.id : resting_id /* buyer ID */,
                     incoming_order.side == Side::Sell ? incoming_order.id : resting_id /* seller ID */,
-                    price /* trade at resting price (this level) */, trade_qty);
+                    price /* trade at resting price (this level) */,
+                    trade_qty);
         }
     }
 
@@ -139,6 +161,15 @@ class MatchingEngine {
 private:
     std::map<int, PriceLevel, std::greater<>> buy_levels;
     std::map<int, PriceLevel, std::less<>> sell_levels;
+    /* We could cache the top of book iterator for a constant factor improvement
+     * but I chose not to for simplicity, assuming the number of levels would be
+     * relatively small compared to order volume and the TOB might often shift
+     *
+     * An alternative implementation to having price levels could be to store all orders
+     * on the same side in a single set. I'd enhance orders with a sequentially generated
+     * seqno and provide custom comparators for buy/sell. However, this approach is
+     * asymptotically slower and less extensible. */
+
     // Map from order ID to its location
     std::unordered_map<int, OrderLocation> order_location_by_id;
 
@@ -209,7 +240,8 @@ private:
             auto [price_level_it, inserted] =
                     book_side.try_emplace(order.price, order.price, order.side);
             // Map the order ID to its level for fast cancellation
-            order_location_by_id[order.id] = OrderLocation{.side = order.side, .price = order.price};
+            order_location_by_id[order.id] = OrderLocation{.side = order.side,
+                                                           .price = order.price};
             PriceLevel &level = price_level_it->second;
             level.addOrder(order);
         };
@@ -231,8 +263,8 @@ private:
                     // Prices do not intersect
                     break;
                 }
-
-                // Matching may result in resting orders being cleared; we want to remove them from this map
+                // Matching may result in resting orders being cleared,
+                // we want to remove them from the `order_location_by_id` map
                 top_level.matchAgainstIncomingOrder(incoming_order, order_location_by_id);
 
                 if (!top_level.empty()) {
